@@ -1,0 +1,45 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+// Cached normalized provider responses, keyed by a hash of the flight query.
+// Keeps repeat searches fast and protects the Amadeus rate limit.
+model ApiCache {
+  id        Int      @id @default(autoincrement())
+  cacheKey  String   @unique @map("cache_key")
+  payload   String
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("api_cache")
+}
+
+// A search the user chose to keep. `params` holds the canonical JSON of the
+// request so identical searches map to one row.
+model SavedSearch {
+  id        Int           @id @default(autoincrement())
+  params    String        @unique
+  createdAt DateTime      @default(now()) @map("created_at")
+  results   SavedResult[]
+
+  @@map("saved_search")
+}
+
+// A favorited trip plan. Always belongs to a saved search — favoriting
+// implicitly saves the search, and deleting the search removes its favorites.
+model SavedResult {
+  id            Int         @id @default(autoincrement())
+  savedSearchId Int         @map("saved_search_id")
+  planId        String      @map("plan_id")
+  plan          String
+  createdAt     DateTime    @default(now()) @map("created_at")
+  savedSearch   SavedSearch @relation(fields: [savedSearchId], references: [id], onDelete: Cascade)
+
+  @@unique([savedSearchId, planId])
+  @@map("saved_result")
+}
