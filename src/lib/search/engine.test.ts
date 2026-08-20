@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mergeSearchResponses, mergeSimilarOptionsResponses } from "./engine";
+import { mergeSearchResponses, mergeSimilarOptionsResponses, withinLegDurationCap } from "./engine";
 import type { SearchResponse, TripPlan } from "../../types/trip-plan";
 
 function plan(id: string, totalPrice: number, departureAt: string): TripPlan {
@@ -90,5 +90,29 @@ describe("mergeSimilarOptionsResponses", () => {
       { date: "2026-09-01", price: 90 },
       { date: "2026-09-02", price: 200 },
     ]);
+  });
+});
+
+describe("withinLegDurationCap", () => {
+  function withDurations(outboundMinutes: number, returnMinutes: number | null): TripPlan {
+    const base = plan("p1", 200, "2026-09-01T08:00:00");
+    return {
+      ...base,
+      outbound: { ...base.outbound, durationMinutes: outboundMinutes },
+      return: returnMinutes === null ? null : { ...base.outbound, durationMinutes: returnMinutes },
+    };
+  }
+
+  it("keeps every plan when no cap is set", () => {
+    expect(withinLegDurationCap(withDurations(35 * 60, null), undefined)).toBe(true);
+  });
+
+  it("rejects a plan whose outbound or return exceeds the cap", () => {
+    expect(withinLegDurationCap(withDurations(35 * 60, 180), 12)).toBe(false);
+    expect(withinLegDurationCap(withDurations(180, 35 * 60), 12)).toBe(false);
+  });
+
+  it("keeps a plan at exactly the cap", () => {
+    expect(withinLegDurationCap(withDurations(12 * 60, 12 * 60), 12)).toBe(true);
   });
 });

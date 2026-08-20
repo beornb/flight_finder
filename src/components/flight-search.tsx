@@ -37,6 +37,7 @@ function toSearchParams(values: SearchFormValues): SearchParams {
     thorough: values.thorough,
     checkedBagIncluded: values.checkedBagIncluded,
     allowSeparateTicketsSameAirportOnly: values.allowSeparateTicketsSameAirportOnly,
+    maxLegHours: values.maxLegHours ?? undefined,
   };
   if (!values.outboundOnly) return params;
   return {
@@ -318,6 +319,7 @@ export function FlightSearch() {
       adults: p.adults,
       cabinClass: p.cabinClass,
       thorough: p.thorough ?? false,
+      maxLegHours: p.maxLegHours ?? null,
       checkedBagIncluded: p.checkedBagIncluded,
       allowSeparateTicketsSameAirportOnly: p.outboundOnly
         ? DEFAULT_SEARCH_VALUES.allowSeparateTicketsSameAirportOnly

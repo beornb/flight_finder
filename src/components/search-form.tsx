@@ -19,6 +19,8 @@ export type SearchFormValues = {
   thorough: boolean;
   checkedBagIncluded: boolean;
   allowSeparateTicketsSameAirportOnly: boolean;
+  // Null means no limit.
+  maxLegHours: number | null;
   provider: ProviderChoice;
 };
 
@@ -44,6 +46,7 @@ export const DEFAULT_SEARCH_VALUES: SearchFormValues = {
   thorough: false,
   checkedBagIncluded: false,
   allowSeparateTicketsSameAirportOnly: true,
+  maxLegHours: null,
   provider: "all",
 };
 
@@ -170,6 +173,17 @@ export function SearchForm({ values, onChange, loading, onSearch, onClear }: Sea
             <option value="BUSINESS">Business</option>
             <option value="FIRST">First</option>
           </select>
+        </Field>
+        <Field label="Max hours per flight">
+          <input
+            className={inputClass}
+            type="number"
+            min={1}
+            max={72}
+            placeholder="No limit"
+            value={values.maxLegHours ?? ""}
+            onChange={(e) => set("maxLegHours", e.target.value === "" ? null : Number(e.target.value))}
+          />
         </Field>
         <Field label="Flight data">
           <select

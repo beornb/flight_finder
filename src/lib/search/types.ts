@@ -28,6 +28,9 @@ export type SearchParams = {
   // Only show fares that include a checked bag.
   checkedBagIncluded: boolean;
   allowSeparateTicketsSameAirportOnly: boolean;
+  // Cap on elapsed time per direction — door to door, so connections and
+  // separate-ticket layovers count. Undefined means no cap.
+  maxLegHours?: number;
   // Carrier codes to exclude from every query. Deliberately optional and not
   // part of saved-search identity: the user's current blocklist always
   // applies, even when re-running an old saved search.

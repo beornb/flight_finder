@@ -23,6 +23,7 @@ export const similarOptionsRequestSchema = z
     cabinClass: z.enum(["ECONOMY", "PREMIUM_ECONOMY", "BUSINESS", "FIRST"]).default("ECONOMY"),
     directOnly: z.boolean().default(false),
     checkedBagIncluded: z.boolean().default(false),
+    maxLegHours: z.number().int().min(1).max(72).optional(),
     excludedAirlines: excludedAirlinesSchema,
   })
   .refine((data) => data.outboundDateFrom <= data.outboundDateTo, {

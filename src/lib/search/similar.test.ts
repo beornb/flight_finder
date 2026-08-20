@@ -2,7 +2,13 @@ import { describe, expect, it } from "vitest";
 import { cheapestPerDate } from "./similar";
 import type { FlightOption } from "./types";
 
-function option(date: string, price: number, stops = 0, requiresSelfTransfer = false): FlightOption {
+function option(
+  date: string,
+  price: number,
+  stops = 0,
+  requiresSelfTransfer = false,
+  durationMinutes = 180
+): FlightOption {
   return {
     id: `opt-${date}-${price}`,
     from: "VIE",
@@ -12,7 +18,7 @@ function option(date: string, price: number, stops = 0, requiresSelfTransfer = f
     arrivalAt: `${date}T11:00:00`,
     segments: [],
     stops,
-    durationMinutes: 180,
+    durationMinutes,
     price,
     currency: "EUR",
     requiresSelfTransfer,
@@ -35,6 +41,16 @@ describe("cheapestPerDate", () => {
       { date: "2026-09-02", price: 60 },
       { date: "2026-09-03", price: null },
     ]);
+  });
+
+  it("skips options longer than the leg cap", () => {
+    const withLongHop = [...options, option("2026-09-03", 20, 1, false, 35 * 60)];
+    expect(cheapestPerDate(withLongHop, dates, false, 10)).toEqual([
+      { date: "2026-09-01", price: 80 },
+      { date: "2026-09-02", price: 60 },
+      { date: "2026-09-03", price: null },
+    ]);
+    expect(cheapestPerDate(withLongHop, dates, false)[2]).toEqual({ date: "2026-09-03", price: 20 });
   });
 
   it("respects direct-only", () => {

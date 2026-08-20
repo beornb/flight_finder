@@ -53,6 +53,7 @@ export const searchRequestSchema = z
     thorough: z.boolean().default(false),
     checkedBagIncluded: z.boolean().default(false),
     allowSeparateTicketsSameAirportOnly: z.boolean().default(true),
+    maxLegHours: z.number().int().min(1).max(72).optional(),
     excludedAirlines: excludedAirlinesSchema,
   })
   .refine((data) => data.outboundDateFrom <= data.outboundDateTo, {

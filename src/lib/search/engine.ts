@@ -133,6 +133,18 @@ function applyAirlineExclusions(options: FlightOption[], excluded: string[] | un
   return options.filter((option) => !option.segments.some((s) => set.has(s.carrierCode)));
 }
 
+// Elapsed time per direction, which for separate-ticket returns spans the
+// layover between the two tickets. Applied to finished plans so every
+// strategy is covered by the one check.
+export function withinLegDurationCap(plan: TripPlan, maxLegHours: number | undefined): boolean {
+  if (maxLegHours === undefined) return true;
+  const maxMinutes = maxLegHours * 60;
+  return (
+    plan.outbound.durationMinutes <= maxMinutes &&
+    (plan.return === null || plan.return.durationMinutes <= maxMinutes)
+  );
+}
+
 type RoundTripRunResult = RunResult<RoundTripOption>;
 
 function runRoundTripQueries(
@@ -289,12 +301,12 @@ export async function runSimilarOptions(
     setSearchStage("similar-return");
     const returnRun = await runQueries(routeQueries(request.returnRoute, returnDates), provider);
     returnOptions = applyAirlineExclusions(returnRun.options, request.excludedAirlines);
-    returnPrices = cheapestPerDate(returnOptions, returnDates, request.directOnly);
+    returnPrices = cheapestPerDate(returnOptions, returnDates, request.directOnly, request.maxLegHours);
   }
 
   return {
     currency: optionsCurrency(outboundOptions) ?? optionsCurrency(returnOptions),
-    outbound: cheapestPerDate(outboundOptions, outboundDates, request.directOnly),
+    outbound: cheapestPerDate(outboundOptions, outboundDates, request.directOnly, request.maxLegHours),
     return: returnPrices,
   };
 }
@@ -524,7 +536,11 @@ export async function runSearch(params: SearchParams, provider: FlightProvider):
   }
 
   const plans = buildTripPlans(outbounds, returnLegs, params);
-  const results = rankTripPlans([...plans, ...roundTripPlans, ...multiCityPlans]);
+  const results = rankTripPlans(
+    [...plans, ...roundTripPlans, ...multiCityPlans].filter((plan) =>
+      withinLegDurationCap(plan, params.maxLegHours)
+    )
+  );
 
   const failures = [
     ...outboundRun.failures,

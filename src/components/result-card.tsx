@@ -287,6 +287,7 @@ export function ResultCard({
           cabinClass: searchContext.cabinClass,
           directOnly: searchContext.directOnly,
           checkedBagIncluded: searchContext.checkedBagIncluded,
+          maxLegHours: searchContext.maxLegHours,
           excludedAirlines: excludedAirlineCodes?.length ? excludedAirlineCodes : undefined,
           provider: providerChoice,
         }),
