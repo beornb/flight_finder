@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { stableStringify } from "@/lib/saved/canonical";
 import type { ExcludedAirline } from "@/lib/search/airline-filter";
+import type { SearchPlan } from "@/lib/search/dry-run";
 import type { SearchParams } from "@/lib/search/types";
 import type { SavedSearchDto } from "@/types/saved";
 import type { SearchResponse, TripPlan } from "@/types/trip-plan";
@@ -10,6 +11,7 @@ import { ExcludedAirlines } from "./excluded-airlines";
 import type { LocationValue } from "./location-select";
 import { ResultsList } from "./results-list";
 import { SavedSearches } from "./saved-searches";
+import { SearchPlanPanel } from "./search-plan";
 import { DEFAULT_SEARCH_VALUES, SearchForm, type SearchFormValues } from "./search-form";
 
 // Maps form values to the API contract. Mirrors the server-side schema
@@ -128,6 +130,7 @@ export function FlightSearch() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [response, setResponse] = useState<SearchResponse | null>(null);
+  const [plan, setPlan] = useState<SearchPlan | null>(null);
   const [saved, setSaved] = useState<SavedSearchDto[]>([]);
   const [excludedAirlines, setExcludedAirlines] = useState<ExcludedAirline[]>([]);
 
@@ -208,13 +211,23 @@ export function FlightSearch() {
       if (!res.ok) {
         setError(await readError(res, "Search failed. Please try again."));
         setResponse(null);
+        setPlan(null);
         return;
       }
-      setResponse((await res.json()) as SearchResponse);
+      const body = (await res.json()) as SearchResponse | SearchPlan;
+      // SEARCH_DRY_RUN returns the query plan instead of fares.
+      if ("dryRun" in body) {
+        setPlan(body);
+        setResponse(null);
+        return;
+      }
+      setPlan(null);
+      setResponse(body);
       setLastSearched(toSearchParams(searchValues));
     } catch {
       setError("Could not reach the search service. Please try again.");
       setResponse(null);
+      setPlan(null);
     } finally {
       setLoading(false);
     }
@@ -334,6 +347,7 @@ export function FlightSearch() {
         onRemoveFavorite={handleRemoveFavorite}
       />
       <ExcludedAirlines airlines={excludedAirlines} onRemove={handleRemoveExcludedAirline} />
+      {plan && <SearchPlanPanel plan={plan} />}
       <ResultsList
         response={response}
         loading={loading}

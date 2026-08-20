@@ -1,10 +1,13 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { ProviderError } from "./types";
 import {
   buildSerpApiTwoSlice,
+  createSerpApiProvider,
   normalizeSerpApiItineraries,
   type SerpApiItinerary,
   type SerpApiSegment,
 } from "./serpapi";
+
 
 function segment(overrides: Partial<SerpApiSegment>): SerpApiSegment {
   return {
@@ -81,3 +84,28 @@ describe("buildSerpApiTwoSlice", () => {
     expect(options[0].outbound.id).toBe(options[0].inbound.id);
   });
 });
+
+describe("createSerpApiProvider rate limit handling", () => {
+  it("throws rate_limit ProviderError when body.error contains quota or search limit message", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      new Response(JSON.stringify({ error: "Your monthly plan has run out of searches." }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      })
+    );
+
+    const provider = createSerpApiProvider({ apiKey: "test-key" });
+    await expect(
+      provider.searchOneWay({
+        origin: "VIE",
+        destination: "LIS",
+        date: "2026-09-02",
+        adults: 1,
+        cabinClass: "ECONOMY",
+      })
+    ).rejects.toThrow(ProviderError);
+
+    fetchSpy.mockRestore();
+  });
+});
+

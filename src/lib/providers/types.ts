@@ -12,6 +12,9 @@ export type FlightProvider = {
   // True when origin/destination accept comma-separated airport lists, so the
   // engine can collapse many airport combinations into one query.
   batchesAirportLists?: boolean;
+  // Upstream requests one engine query really costs. Two-slice fares need a
+  // follow-up request per candidate first leg on token-based APIs.
+  requestsPerQuery?: { oneWay: number; twoSlice: number };
   searchOneWay(query: FlightQuery): Promise<FlightOption[]>;
   searchRoundTrip(query: RoundTripQuery): Promise<RoundTripOption[]>;
   // Single-ticket open-jaw pricing; only providers whose API supports

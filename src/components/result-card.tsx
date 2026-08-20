@@ -3,10 +3,12 @@
 import { useState } from "react";
 import { kayakCompareUrl } from "@/lib/compare-link";
 import { formatDate, formatDuration, formatPrice, formatTime } from "@/lib/format";
+import type { BookingLinkPlan, SearchPlan } from "@/lib/search/dry-run";
 import type { ProviderChoice, SearchParams } from "@/lib/search/types";
 import type { BookingLink, BookingLinksResponse } from "@/types/booking";
 import type { SimilarOptionsResponse } from "@/types/similar-options";
 import type { LegSummary, TripPlan } from "@/types/trip-plan";
+import { SearchPlanPanel } from "./search-plan";
 
 const TRIP_TYPE_LABELS: Record<TripPlan["tripType"], string> = {
   DIRECT_ROUNDTRIP: "Round trip",
@@ -126,12 +128,14 @@ type BookingLinksState =
   | { status: "idle" }
   | { status: "loading" }
   | { status: "error"; message: string }
+  | { status: "dryRun"; plan: BookingLinkPlan }
   | { status: "loaded"; links: Record<string, BookingLink[]>; partial: boolean };
 
 type SimilarState =
   | { status: "idle" }
   | { status: "loading" }
   | { status: "error"; message: string }
+  | { status: "dryRun"; plan: SearchPlan }
   | { status: "loaded"; data: SimilarOptionsResponse };
 
 function SimilarMatrix({ plan, data }: { plan: TripPlan; data: SimilarOptionsResponse }) {
@@ -254,7 +258,11 @@ export function ResultCard({
         setBooking({ status: "error", message: "Could not load booking links. Please try again." });
         return;
       }
-      const data = (await res.json()) as BookingLinksResponse;
+      const data = (await res.json()) as BookingLinksResponse | BookingLinkPlan;
+      if ("dryRun" in data) {
+        setBooking({ status: "dryRun", plan: data });
+        return;
+      }
       setBooking({ status: "loaded", links: data.links, partial: data.failures.length > 0 });
     } catch {
       setBooking({ status: "error", message: "Could not reach the booking service." });
@@ -287,7 +295,12 @@ export function ResultCard({
         setSimilar({ status: "error", message: "Could not load similar options. Please try again." });
         return;
       }
-      setSimilar({ status: "loaded", data: (await res.json()) as SimilarOptionsResponse });
+      const data = (await res.json()) as SimilarOptionsResponse | SearchPlan;
+      if ("dryRun" in data) {
+        setSimilar({ status: "dryRun", plan: data });
+        return;
+      }
+      setSimilar({ status: "loaded", data });
     } catch {
       setSimilar({ status: "error", message: "Could not reach the search service." });
     }
@@ -375,6 +388,12 @@ export function ResultCard({
         <p className="mt-2 text-xs text-red-600 dark:text-red-400">{similar.message}</p>
       )}
 
+      {similar.status === "dryRun" && (
+        <div className="mt-3">
+          <SearchPlanPanel plan={similar.plan} />
+        </div>
+      )}
+
       {similar.status === "loaded" && (
         <div className="mt-3 rounded-lg border border-zinc-200 p-3 dark:border-zinc-800">
           <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-400">
@@ -382,6 +401,21 @@ export function ResultCard({
             {plan.return && ` · ${plan.return.from} → ${plan.return.to}`}
           </p>
           <SimilarMatrix plan={plan} data={similar.data} />
+        </div>
+      )}
+
+      {booking.status === "dryRun" && (
+        <div className="mt-3 rounded-lg border border-amber-300 p-3 text-xs dark:border-amber-700">
+          <p className="mb-1 font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-300">
+            Dry run — booking links not requested
+          </p>
+          <ul className="font-mono text-zinc-600 dark:text-zinc-400">
+            {booking.plan.lookups.map((lookup) => (
+              <li key={lookup.ticketId}>
+                {lookup.ticketId} → {lookup.provider ?? "no configured provider"}
+              </li>
+            ))}
+          </ul>
         </div>
       )}
 

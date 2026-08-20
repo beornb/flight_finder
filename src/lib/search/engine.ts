@@ -4,6 +4,7 @@ import { airportsForCountry, findAirport, resolveLocationAirports } from "../dat
 import { ProviderError, type FlightProvider } from "../providers/types";
 import type { SimilarOptionsRequest } from "../validation/similar-schema";
 import { getCachedOptions, setCachedOptions } from "./cache";
+import { setSearchStage } from "./dry-run";
 import {
   airportCap,
   batchAirportQueries,
@@ -277,6 +278,7 @@ export async function runSimilarOptions(
   }
 
   const outboundDates = expandDates(request.outboundDateFrom, request.outboundDateTo);
+  setSearchStage("similar-outbound");
   const outboundRun = await runQueries(routeQueries(request.outboundRoute, outboundDates), provider);
   const outboundOptions = applyAirlineExclusions(outboundRun.options, request.excludedAirlines);
 
@@ -284,6 +286,7 @@ export async function runSimilarOptions(
   let returnOptions: FlightOption[] = [];
   if (request.returnRoute && request.returnDateFrom && request.returnDateTo) {
     const returnDates = expandDates(request.returnDateFrom, request.returnDateTo);
+    setSearchStage("similar-return");
     const returnRun = await runQueries(routeQueries(request.returnRoute, returnDates), provider);
     returnOptions = applyAirlineExclusions(returnRun.options, request.excludedAirlines);
     returnPrices = cheapestPerDate(returnOptions, returnDates, request.directOnly);
@@ -321,7 +324,9 @@ export async function runSearch(params: SearchParams, provider: FlightProvider):
     return provider.batchesAirportLists ? batchAirportQueries(queries) : queries;
   }
 
+  setSearchStage("outbound");
   const outboundRun = await runQueries(maybeBatch(buildOutboundQueries(params)), provider);
+  setSearchStage("return");
   const returnRun = await runQueries(maybeBatch(buildReturnQueries(params)), provider);
 
   const outbounds = applyAirlineExclusions(
@@ -341,10 +346,10 @@ export async function runSearch(params: SearchParams, provider: FlightProvider):
   // their own lower group anyway.
   if (!params.outboundOnly && params.allowSeparateTicketsSameAirportOnly) {
     const { firstLegs, secondLegs } = buildFallbackQueries(params);
-    const [firstRun, secondRun] = [
-      await runQueries(maybeBatch(firstLegs), provider),
-      await runQueries(maybeBatch(secondLegs), provider),
-    ];
+    setSearchStage("separate-ticket-first-leg");
+    const firstRun = await runQueries(maybeBatch(firstLegs), provider);
+    setSearchStage("separate-ticket-second-leg");
+    const secondRun = await runQueries(maybeBatch(secondLegs), provider);
     fallbackRun = {
       options: [],
       queriesRun: firstRun.queriesRun + secondRun.queriesRun,
@@ -401,6 +406,7 @@ export async function runSearch(params: SearchParams, provider: FlightProvider):
       }
     }
 
+    setSearchStage("round-trip");
     rtRun = await runRoundTripQueries(rtQueries, provider);
     const excludedSet = new Set(params.excludedAirlines ?? []);
     const cleanRoundTrips = rtRun.options.filter(
@@ -443,6 +449,7 @@ export async function runSearch(params: SearchParams, provider: FlightProvider):
           }
         }
       }
+      setSearchStage("round-trip-positioning");
       positioningRun = await runQueries(maybeBatch(positioningQueries), provider);
       roundTripPlans = [
         ...roundTripPlans,
@@ -501,6 +508,7 @@ export async function runSearch(params: SearchParams, provider: FlightProvider):
       }
     }
 
+    setSearchStage("multi-city");
     mcRun = await runMultiCityQueries(
       sampleEvenly(mcQueries, params.thorough ? 64 : MAX_MULTI_CITY_QUERIES),
       provider

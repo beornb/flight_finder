@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { resolveProviderForTicket } from "@/lib/providers";
 import { ProviderError } from "@/lib/providers/types";
+import { buildBookingLinkPlan, isDryRun } from "@/lib/search/dry-run";
 import type { BookingLink, BookingLinksResponse } from "@/types/booking";
 
 const bookingLinksRequestSchema = z.object({
@@ -20,6 +21,18 @@ export async function POST(request: Request) {
   const parsed = bookingLinksRequestSchema.safeParse(body);
   if (!parsed.success) {
     return Response.json({ error: "Invalid booking links request." }, { status: 400 });
+  }
+
+  // SEARCH_DRY_RUN: name the provider each ticket would be looked up with.
+  if (isDryRun()) {
+    return Response.json(
+      buildBookingLinkPlan(
+        [...new Set(parsed.data.ticketIds)].map((ticketId) => ({
+          ticketId,
+          provider: resolveProviderForTicket(ticketId)?.name ?? null,
+        }))
+      )
+    );
   }
 
   const links: Record<string, BookingLink[]> = {};

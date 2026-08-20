@@ -1,6 +1,12 @@
 import { z } from "zod";
 import { resolveProviders } from "@/lib/providers";
 import { ProviderError } from "@/lib/providers/types";
+import {
+  buildSearchPlan,
+  createRecordingProvider,
+  isDryRun,
+  type ProviderPlan,
+} from "@/lib/search/dry-run";
 import { mergeSearchResponses, runSearch, SearchError } from "@/lib/search/engine";
 import { searchRequestSchema } from "@/lib/validation/search-schema";
 import type { SearchResponse } from "@/types/trip-plan";
@@ -50,6 +56,23 @@ export async function POST(request: Request) {
   const resolved = resolveProviders(providerParse.data);
   if ("error" in resolved) {
     return Response.json({ error: resolved.error }, { status: 400 });
+  }
+
+  // SEARCH_DRY_RUN: walk the same strategies against recording providers and
+  // return the query plan instead of fares. Sequential so each provider's
+  // stage labels stay its own.
+  if (isDryRun()) {
+    try {
+      const plans: ProviderPlan[] = [];
+      for (const provider of resolved.providers) {
+        const recording = createRecordingProvider(provider);
+        await runSearch(parsed.data, recording.provider);
+        plans.push(recording.plan());
+      }
+      return Response.json(buildSearchPlan(plans));
+    } catch (error) {
+      return errorResponse(error);
+    }
   }
 
   const settled = await Promise.allSettled(

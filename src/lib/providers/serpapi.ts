@@ -25,6 +25,13 @@ const CURRENCY = "EUR";
 // cheapest first legs (each costs one extra search) so good fares hidden
 // behind a non-cheapest first leg aren't lost.
 const TWO_STEP_FIRST_LEGS = 3;
+const RATE_LIMIT_RETRIES = 3;
+const RATE_LIMIT_BASE_DELAY_MS = 1500;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 
 const TRAVEL_CLASS_MAP: Record<FlightQuery["cabinClass"], string> = {
   ECONOMY: "1",
@@ -180,7 +187,12 @@ export function createSerpApiProvider(config: SerpApiConfig): FlightProvider {
       deep_search: "true",
       ...params,
     });
-    const response = await fetch(`${BASE_URL}?${query}`);
+    const url = `${BASE_URL}?${query}`;
+    let response = await fetch(url);
+    for (let attempt = 1; attempt <= RATE_LIMIT_RETRIES && response.status === 429; attempt++) {
+      await sleep(RATE_LIMIT_BASE_DELAY_MS * attempt);
+      response = await fetch(url);
+    }
     if (response.status === 401 || response.status === 403) {
       throw new ProviderError("auth", `serpapi returned status ${response.status}`);
     }
@@ -191,6 +203,9 @@ export function createSerpApiProvider(config: SerpApiConfig): FlightProvider {
     if (body.error) {
       // "No results" comes back as an error string, not an empty list.
       if (/hasn't returned any results/i.test(body.error)) return {};
+      if (/rate limit|quota|searches|too many requests|plan has run out/i.test(body.error)) {
+        throw new ProviderError("rate_limit", `serpapi: ${body.error}`);
+      }
       throw new ProviderError(response.ok ? "bad_request" : "unavailable", `serpapi: ${body.error}`);
     }
     if (!response.ok) {
@@ -227,6 +242,7 @@ export function createSerpApiProvider(config: SerpApiConfig): FlightProvider {
     // departure_id/arrival_id accept comma-separated airport lists, letting
     // the engine cover all candidate airports in one billed search.
     batchesAirportLists: true,
+    requestsPerQuery: { oneWay: 1, twoSlice: 1 + TWO_STEP_FIRST_LEGS },
     async searchOneWay(query: FlightQuery): Promise<FlightOption[]> {
       const body = await search({
         type: "2",

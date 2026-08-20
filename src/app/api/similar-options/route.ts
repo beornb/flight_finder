@@ -1,6 +1,12 @@
 import { z } from "zod";
 import { resolveProviders } from "@/lib/providers";
 import { ProviderError } from "@/lib/providers/types";
+import {
+  buildSearchPlan,
+  createRecordingProvider,
+  isDryRun,
+  type ProviderPlan,
+} from "@/lib/search/dry-run";
 import { mergeSimilarOptionsResponses, runSimilarOptions } from "@/lib/search/engine";
 import { similarOptionsRequestSchema } from "@/lib/validation/similar-schema";
 import type { SimilarOptionsResponse } from "@/types/similar-options";
@@ -30,6 +36,17 @@ export async function POST(request: Request) {
   const resolved = resolveProviders(providerParse.data);
   if ("error" in resolved) {
     return Response.json({ error: resolved.error }, { status: 400 });
+  }
+
+  // SEARCH_DRY_RUN: report the per-date queries this matrix would issue.
+  if (isDryRun()) {
+    const plans: ProviderPlan[] = [];
+    for (const provider of resolved.providers) {
+      const recording = createRecordingProvider(provider);
+      await runSimilarOptions(parsed.data, recording.provider);
+      plans.push(recording.plan());
+    }
+    return Response.json(buildSearchPlan(plans));
   }
 
   const settled = await Promise.allSettled(
